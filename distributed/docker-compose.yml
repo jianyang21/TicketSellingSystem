@@ -1,0 +1,119 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    # Default max_connections=100 isn't enough headroom once each app
+    # replica runs multiple uvicorn workers (see UVICORN_WORKERS below),
+    # each with its own asyncpg pool: replicas * workers * DB_POOL_MAX_SIZE
+    # can now reach ~120 at these defaults (3 * 4 * 10).
+    command: postgres -c max_connections=200
+    environment:
+      POSTGRES_DB: tickets
+      POSTGRES_USER: tickets
+      POSTGRES_PASSWORD: tickets
+    volumes:
+      - ./init_db.sql:/docker-entrypoint-initdb.d/init_db.sql:ro
+      - pg_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tickets -d tickets"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    # AOF persistence: appendonly yes writes every accepted command to a
+    # durable log; appendfsync everysec fsyncs that log about once a
+    # second (rather than never, or on every single command) as a
+    # throughput/durability trade-off. Combined with the redis_data
+    # volume below, an XADD that made it into the AOF survives both a
+    # graceful restart and a container crash.
+    command: redis-server --appendonly yes --appendfsync everysec
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  app1:
+    build: ./app
+    environment:
+      DATABASE_URL: postgresql://tickets:tickets@postgres:5432/tickets
+      REDIS_URL: redis://redis:6379/0
+      INSTANCE_ID: app1
+      TOTAL_TICKETS: "100"
+      QUEUE_WAIT_TIMEOUT_SECONDS: "1.5"
+      UVICORN_WORKERS: "4"
+      DB_POOL_MIN_SIZE: "2"
+      DB_POOL_MAX_SIZE: "10"
+      RATE_LIMIT_TOKEN_CAPACITY: "100"
+      RATE_LIMIT_TOKEN_REFILL_RATE: "80"
+      RATE_LIMIT_LEAKY_CAPACITY: "400"
+      RATE_LIMIT_LEAKY_LEAK_RATE: "80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  app2:
+    build: ./app
+    environment:
+      DATABASE_URL: postgresql://tickets:tickets@postgres:5432/tickets
+      REDIS_URL: redis://redis:6379/0
+      INSTANCE_ID: app2
+      TOTAL_TICKETS: "100"
+      QUEUE_WAIT_TIMEOUT_SECONDS: "1.5"
+      UVICORN_WORKERS: "4"
+      DB_POOL_MIN_SIZE: "2"
+      DB_POOL_MAX_SIZE: "10"
+      RATE_LIMIT_TOKEN_CAPACITY: "100"
+      RATE_LIMIT_TOKEN_REFILL_RATE: "80"
+      RATE_LIMIT_LEAKY_CAPACITY: "400"
+      RATE_LIMIT_LEAKY_LEAK_RATE: "80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  app3:
+    build: ./app
+    environment:
+      DATABASE_URL: postgresql://tickets:tickets@postgres:5432/tickets
+      REDIS_URL: redis://redis:6379/0
+      INSTANCE_ID: app3
+      TOTAL_TICKETS: "100"
+      QUEUE_WAIT_TIMEOUT_SECONDS: "1.5"
+      UVICORN_WORKERS: "4"
+      DB_POOL_MIN_SIZE: "2"
+      DB_POOL_MAX_SIZE: "10"
+      RATE_LIMIT_TOKEN_CAPACITY: "100"
+      RATE_LIMIT_TOKEN_REFILL_RATE: "80"
+      RATE_LIMIT_LEAKY_CAPACITY: "400"
+      RATE_LIMIT_LEAKY_LEAK_RATE: "80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  nginx:
+    image: nginx:alpine
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "8080:80"
+    depends_on:
+      - app1
+      - app2
+      - app3
+
+volumes:
+  pg_data:
+  redis_data:

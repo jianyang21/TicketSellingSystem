@@ -1,0 +1,23 @@
+Reset: {'status': 'ok', 'total_tickets': 100, 'sold_count': 0, 'remaining_tickets': 100, 'message': 'State reset. Starting fresh with 0 sold.'}
+
+Plan: 300 unique req_ids, ~20% replayed 3x each -> 418 total HTTP requests, concurrency=150
+
+=== Load Summary ===
+Requests fired:        418
+Concurrency (threads): 150
+Wall-clock duration:   0.577s
+Throughput:            723.9 req/s
+Transport errors:      0
+Latency ms:  min=15.83  median=97.85  p99=136.68  max=143.10
+
+=== Invariant Checks ===
+[FAIL] INV1 No overselling (sold_count <= total_tickets)
+       sold_count=101 total_tickets=100 tickets_issued=101
+[PASS] INV2 No duplicate ticket numbers issued
+       issued=101 distinct=101 dupes=0
+[PASS] INV3 Idempotency holds (same req_id -> same ticket, always)
+       req_ids_with_conflicting_tickets=0 mismatched_vs_server=0
+[PASS] INV4 Bookkeeping consistent (sold_count == processed_requests == user_tickets)
+       sold_count=101 processed_requests=101 user_ticket_total=101
+
+Overall: FAIL

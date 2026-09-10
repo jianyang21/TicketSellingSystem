@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+*.pyc
+distributed/postgres_data/
+distributed/redis_data/
+*.log
